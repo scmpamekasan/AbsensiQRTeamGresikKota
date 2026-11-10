@@ -61,8 +61,8 @@ st.markdown("""
 # ====================================================
 # 2. KONFIGURASI DATA KANTOR & DATABASE
 # ====================================================
-KANTOR_LATITUDE = -6.983120          
-KANTOR_LONGITUDE = 112.489525
+KANTOR_LATITUDE = -7.258910        
+KANTOR_LONGITUDE = 112.696058
 RADIUS_MAKSIMAL_METER = 150
 
 BATAS_JAM_MASUK = time(8, 0, 0)
