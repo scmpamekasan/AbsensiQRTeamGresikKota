@@ -56,8 +56,8 @@ st.markdown("""
 # 2. KONFIGURASI DATA KANTOR & DATABASE
 # ====================================================
 # Koordinat Kantor Terbaru (Contoh: Gresik Kota )
-KANTOR_LATITUDE = -7.258910          
-KANTOR_LONGITUDE = 112.696058
+KANTOR_LATITUDE = -7.182355          
+KANTOR_LONGITUDE = 112.649103
 RADIUS_MAKSIMAL_METER = 150
 
 # Batas Jam Masuk Tepat Waktu (Jam 08:00:00)
