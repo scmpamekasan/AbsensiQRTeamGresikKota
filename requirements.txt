@@ -1,0 +1,9 @@
+streamlit
+pandas
+opencv-python-headless
+numpy
+piexif
+openpyxl
+pillow
+streamlit-js-eval
+pytz
