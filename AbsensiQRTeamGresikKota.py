@@ -23,6 +23,29 @@ FOLDER_FOTO = "folder_foto_absen"
 os.makedirs(FOLDER_FOTO, exist_ok=True)
 
 # ====================================================
+# FUNGSI PEMBERSIHAN OTOMATIS FOTO LEWAT 1 HARI
+# ====================================================
+def bersihkan_foto_lama(hari_ini_str):
+    """Menghapus file foto di folder jika tanggalnya bukan hari ini"""
+    if os.path.exists(FOLDER_FOTO):
+        format_hari_ini = hari_ini_str.replace("-", "") # Format YYYYMMDD
+        for filename in os.listdir(FOLDER_FOTO):
+            if "_" in filename:
+                parts = filename.split("_")
+                if len(parts) >= 2:
+                    tanggal_file = parts[1][:8] # Mengambil bagian YYYYMMDD dari nama file
+                    if tanggal_file != format_hari_ini:
+                        try:
+                            os.remove(os.path.join(FOLDER_FOTO, filename))
+                        except Exception:
+                            pass
+
+# Jalankan pembersihan foto lama berdasarkan tanggal hari ini
+waktu_sekarang_wib = datetime.now(TZ_WIB)
+hari_ini = waktu_sekarang_wib.strftime("%Y-%m-%d")
+bersihkan_foto_lama(hari_ini)
+
+# ====================================================
 # 1. KONFIGURASI HALAMAN & CUSTOM CSS STYLING
 # ====================================================
 st.set_page_config(
@@ -218,9 +241,6 @@ try:
 except Exception:
     pass
 
-waktu_sekarang_wib = datetime.now(TZ_WIB)
-hari_ini = waktu_sekarang_wib.strftime("%Y-%m-%d")
-
 with st.expander("📍 Informasi Radius & Lokasi Kantor"):
     col_exp1, col_exp2 = st.columns(2)
     with col_exp1:
@@ -309,7 +329,7 @@ else:
             st.error(f"❌ **Lokasi Ditolak!** Jarak Anda ({jarak:.1f} m) berada di luar batas operasional kantor ({RADIUS_MAKSIMAL_METER} m).")
 
 # ====================================================
-# 6. PANEL ADMIN (MONITORING & GALERI FOTO)
+# 6. PANEL ADMIN (MONITORING & GALERI FOTO GRID)
 # ====================================================
 st.markdown("---")
 st.markdown("### 📊 Panel Monitoring Absensi Real-time")
@@ -319,33 +339,30 @@ df_absen = muat_data_absen()
 if not df_absen.empty:
     st.dataframe(df_absen, use_container_width=True)
     
-    # --- FITUR GALERI FOTO SELFIE DI PANEL ADMIN ---
+    # --- GALERI FOTO GRID UNTUK HARI INI ---
     st.markdown("---")
-    st.markdown("### 🖼️ Galeri Verifikasi Foto Selfie Karyawan")
+    st.markdown(f"### 🖼️ Galeri Foto Kehadiran Hari Ini ({hari_ini})")
     
-    # Pilih karyawan berdasarkan data kehadiran
-    pilihan_karyawan = st.selectbox("Pilih Karyawan untuk Melihat Foto Selfie:", df_absen['Nama'].unique())
+    # Saring data khusus hari ini
+    df_hari_ini = df_absen[df_absen['Tanggal'] == hari_ini]
     
-    # Ambil baris data karyawan yang dipilih
-    data_karyawan_pilih = df_absen[df_absen['Nama'] == pilihan_karyawan].iloc[0]
-    path_foto_target = data_karyawan_pilih['Path Foto']
-    
-    col_f1, col_f2 = st.columns([1, 2])
-    with col_f1:
-        if path_foto_target and os.path.exists(path_foto_target):
-            st.image(path_foto_target, caption=f"Selfie: {pilihan_karyawan}", width=250)
-        else:
-            st.info("📭 File foto tidak ditemukan pada server.")
-            
-    with col_f2:
-        st.markdown(f"**Detail Kehadiran:**")
-        st.markdown(f"- **ID Karyawan:** `{data_karyawan_pilih['ID']}`")
-        st.markdown(f"- **Nama:** `{data_karyawan_pilih['Nama']}`")
-        st.markdown(f"- **Waktu Presensi:** `{data_karyawan_pilih['Waktu Presensi']}`")
-        st.markdown(f"- **Status:** `{data_karyawan_pilih['Status']}`")
-        st.markdown(f"- **Koordinat GPS:** `{data_karyawan_pilih['Koordinat GPS']}`")
-        st.markdown(f"- **Jarak dari Kantor:** `{data_karyawan_pilih['Jarak (meter)']:.1f} meter`")
-        st.markdown(f"- **Perangkat:** `{data_karyawan_pilih['Perangkat']}`")
+    if not df_hari_ini.empty:
+        # Menampilkan dalam bentuk grid 3 kolom per baris
+        cols = st.columns(3)
+        for index, row in df_hari_ini.reset_index(drop=True).iterrows():
+            col_target = cols[index % 3]
+            with col_target:
+                st.markdown(f"**{row['Nama']}**")
+                st.caption(f"🕒 {row['Waktu Presensi']}\n\n📌 {row['Status']}")
+                
+                path_foto = row['Path Foto']
+                if path_foto and os.path.exists(path_foto):
+                    st.image(path_foto, use_column_width=True)
+                else:
+                    st.info("Foto tidak tersedia")
+                st.markdown("---")
+    else:
+        st.info("📭 Belum ada foto presensi yang masuk untuk hari ini.")
 
 else:
     st.info("📭 Belum ada riwayat data presensi karyawan yang tercatat untuk hari ini.")
@@ -392,8 +409,15 @@ if st.session_state.get('konfirmasi_reset', False):
                 conn.commit()
                 conn.close()
                 
+                # Bersihkan semua file foto di folder juga saat reset total
+                for f in os.listdir(FOLDER_FOTO):
+                    try:
+                        os.remove(os.path.join(FOLDER_FOTO, f))
+                    except:
+                        pass
+                
                 st.session_state.pop('konfirmasi_reset', None)
-                st.session_state['notifikasi_sukses'] = "🗑️ Seluruh riwayat log absensi berhasil dibersihkan secara permanen!"
+                st.session_state['notifikasi_sukses'] = "🗑️ Seluruh riwayat log absensi & foto berhasil dibersihkan secara permanen!"
                 st.rerun()
             else:
                 st.error("❌ Password Admin salah! Aksi dibatalkan.")
