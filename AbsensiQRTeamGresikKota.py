@@ -61,7 +61,7 @@ st.markdown("""
 # ====================================================
 # 2. KONFIGURASI DATA KANTOR & DATABASE
 # ====================================================
-KANTOR_LATITUDE = -7.258910        
+KANTOR_LATITUDE = -7.258910          
 KANTOR_LONGITUDE = 112.696058
 RADIUS_MAKSIMAL_METER = 150
 
@@ -110,7 +110,6 @@ def inisialisasi_database():
         )
     """)
     
-    # Cek apakah kolom path_foto sudah ada (untuk migrasi database lama)
     cursor.execute("PRAGMA table_info(absensi)")
     kolom = [kol[1] for kol in cursor.fetchall()]
     if "path_foto" not in kolom:
@@ -267,7 +266,6 @@ else:
                     format_func=lambda x: f"{x} — {KARYAWAN_DATA[x]}"
                 )
                 
-                # Wajib Foto Selfie Langsung Menggunakan Kamera HP
                 picture = st.camera_input("Ambil Foto Selfie Kehadiran Anda Saat Ini")
                 
                 submit_button = st.form_submit_button("🚀 Kirim Absensi Sekarang", type="primary")
@@ -282,25 +280,21 @@ else:
                         nama_karyawan = KARYAWAN_DATA[emp_id]
                         info_perangkat = parsing_device_info(user_agent_header)
 
-                        # Simpan file fisik foto ke folder server
                         bytes_data = picture.getvalue()
                         img = Image.open(BytesIO(bytes_data))
                         
                         nama_file_foto = f"{FOLDER_FOTO}/{emp_id}_{waktu_sekarang.strftime('%Y%m%d_%H%M%S')}.jpg"
                         img.save(nama_file_foto, "JPEG")
 
-                        # Logika Jam Masuk (08:00 WIB)
                         waktu_presensi_jam = waktu_sekarang.time()
                         status_teks = "Terima Kasih Telah Datang Tepat Waktu" if waktu_presensi_jam <= BATAS_JAM_MASUK else "Terlambat"
 
-                        # Simpan ke Database SQLite
                         berhasil = simpan_absen(
                             hari_ini, emp_id, nama_karyawan, waktu_str, 
                             koordinat_str, user_lat, user_lon, jarak, status_teks, info_perangkat, nama_file_foto
                         )
 
                         if berhasil:
-                            # Kunci browser ini agar tidak bisa absen lagi hari ini
                             streamlit_js_eval(js_expressions=f"localStorage.setItem('{key_ls}', 'true')", key=f"set_ls_{hari_ini}")
 
                             if waktu_presensi_jam <= BATAS_JAM_MASUK:
@@ -315,7 +309,7 @@ else:
             st.error(f"❌ **Lokasi Ditolak!** Jarak Anda ({jarak:.1f} m) berada di luar batas operasional kantor ({RADIUS_MAKSIMAL_METER} m).")
 
 # ====================================================
-# 6. PANEL ADMIN (MONITORING & EXPORT)
+# 6. PANEL ADMIN (MONITORING & GALERI FOTO)
 # ====================================================
 st.markdown("---")
 st.markdown("### 📊 Panel Monitoring Absensi Real-time")
@@ -324,6 +318,35 @@ df_absen = muat_data_absen()
 
 if not df_absen.empty:
     st.dataframe(df_absen, use_container_width=True)
+    
+    # --- FITUR GALERI FOTO SELFIE DI PANEL ADMIN ---
+    st.markdown("---")
+    st.markdown("### 🖼️ Galeri Verifikasi Foto Selfie Karyawan")
+    
+    # Pilih karyawan berdasarkan data kehadiran
+    pilihan_karyawan = st.selectbox("Pilih Karyawan untuk Melihat Foto Selfie:", df_absen['Nama'].unique())
+    
+    # Ambil baris data karyawan yang dipilih
+    data_karyawan_pilih = df_absen[df_absen['Nama'] == pilihan_karyawan].iloc[0]
+    path_foto_target = data_karyawan_pilih['Path Foto']
+    
+    col_f1, col_f2 = st.columns([1, 2])
+    with col_f1:
+        if path_foto_target and os.path.exists(path_foto_target):
+            st.image(path_foto_target, caption=f"Selfie: {pilihan_karyawan}", width=250)
+        else:
+            st.info("📭 File foto tidak ditemukan pada server.")
+            
+    with col_f2:
+        st.markdown(f"**Detail Kehadiran:**")
+        st.markdown(f"- **ID Karyawan:** `{data_karyawan_pilih['ID']}`")
+        st.markdown(f"- **Nama:** `{data_karyawan_pilih['Nama']}`")
+        st.markdown(f"- **Waktu Presensi:** `{data_karyawan_pilih['Waktu Presensi']}`")
+        st.markdown(f"- **Status:** `{data_karyawan_pilih['Status']}`")
+        st.markdown(f"- **Koordinat GPS:** `{data_karyawan_pilih['Koordinat GPS']}`")
+        st.markdown(f"- **Jarak dari Kantor:** `{data_karyawan_pilih['Jarak (meter)']:.1f} meter`")
+        st.markdown(f"- **Perangkat:** `{data_karyawan_pilih['Perangkat']}`")
+
 else:
     st.info("📭 Belum ada riwayat data presensi karyawan yang tercatat untuk hari ini.")
 
