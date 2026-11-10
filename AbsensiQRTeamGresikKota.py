@@ -1,8 +1,10 @@
 import streamlit as st
 import pandas as pd
 import sqlite3
+import os
 from datetime import datetime, time
 from io import BytesIO
+from PIL import Image
 import math
 import pytz
 
@@ -15,6 +17,10 @@ except ImportError:
 
 # Definisi Zona Waktu Asia/Jakarta (WIB)
 TZ_WIB = pytz.timezone('Asia/Jakarta')
+
+# Folder Penyimpanan Foto Selfie
+FOLDER_FOTO = "folder_foto_absen"
+os.makedirs(FOLDER_FOTO, exist_ok=True)
 
 # ====================================================
 # 1. KONFIGURASI HALAMAN & CUSTOM CSS STYLING
@@ -55,15 +61,12 @@ st.markdown("""
 # ====================================================
 # 2. KONFIGURASI DATA KANTOR & DATABASE
 # ====================================================
-# Koordinat Kantor Terbaru (Contoh: Gresik Kota )
-KANTOR_LATITUDE = -7.182355          
-KANTOR_LONGITUDE = 112.649103
+KANTOR_LATITUDE = -6.983120          
+KANTOR_LONGITUDE = 112.489525
 RADIUS_MAKSIMAL_METER = 150
 
-# Batas Jam Masuk Tepat Waktu (Jam 08:00:00)
 BATAS_JAM_MASUK = time(8, 0, 0)
 
-# Data Karyawan Terdaftar Terbaru
 KARYAWAN_DATA = {
     "05001908": "Lila Aditya Perdana",
     "05002370": "Hendra",
@@ -102,14 +105,16 @@ def inisialisasi_database():
             longitude REAL,
             jarak_dari_kantor REAL,
             status TEXT,
-            device_info TEXT
+            device_info TEXT,
+            path_foto TEXT
         )
     """)
     
+    # Cek apakah kolom path_foto sudah ada (untuk migrasi database lama)
     cursor.execute("PRAGMA table_info(absensi)")
     kolom = [kol[1] for kol in cursor.fetchall()]
-    if "device_info" not in kolom:
-        cursor.execute("ALTER TABLE absensi ADD COLUMN device_info TEXT")
+    if "path_foto" not in kolom:
+        cursor.execute("ALTER TABLE absensi ADD COLUMN path_foto TEXT")
         conn.commit()
 
     cursor.execute("""
@@ -129,27 +134,27 @@ def muat_data_absen():
                    waktu_presensi AS [Waktu Presensi], koordinat_gps AS [Koordinat GPS], 
                    latitude AS Latitude, longitude AS Longitude, 
                    jarak_dari_kantor AS [Jarak (meter)], status AS Status,
-                   device_info AS [Perangkat HP/Browser]
+                   device_info AS [Perangkat], path_foto AS [Path Foto]
             FROM absensi
             ORDER BY waktu_presensi DESC
         """, conn)
     except Exception:
         df = pd.DataFrame(columns=[
             "Tanggal", "ID", "Nama", "Waktu Presensi", "Koordinat GPS",
-            "Latitude", "Longitude", "Jarak (meter)", "Status", "Perangkat HP/Browser"
+            "Latitude", "Longitude", "Jarak (meter)", "Status", "Perangkat", "Path Foto"
         ])
     conn.close()
     return df
 
-def simpan_absen(tanggal, emp_id, nama, waktu_str, koordinat_str, lat, lon, jarak, status, device_info):
+def simpan_absen(tanggal, emp_id, nama, waktu_str, koordinat_str, lat, lon, jarak, status, device_info, path_foto):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     try:
         cursor.execute("""
             INSERT INTO absensi 
-            (tanggal, id_karyawan, nama, waktu_presensi, koordinat_gps, latitude, longitude, jarak_dari_kantor, status, device_info)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (tanggal, emp_id, nama, waktu_str, koordinat_str, lat, lon, jarak, status, device_info))
+            (tanggal, id_karyawan, nama, waktu_presensi, koordinat_gps, latitude, longitude, jarak_dari_kantor, status, device_info, path_foto)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (tanggal, emp_id, nama, waktu_str, koordinat_str, lat, lon, jarak, status, device_info, path_foto))
         conn.commit()
         return True
     except sqlite3.IntegrityError:
@@ -173,44 +178,30 @@ def hitung_jarak_meter(lat1, lon1, lat2, lon2):
 def parsing_device_info(ua_string):
     if not ua_string:
         return "Unknown Device"
-    
     ua_lower = ua_string.lower()
-    os_name = "Desktop / PC"
-    browser_name = "Browser Lain"
+    os_name, browser_name = "Desktop / PC", "Browser Lain"
 
-    if "iphone" in ua_lower:
-        os_name = "iOS (iPhone)"
-    elif "ipad" in ua_lower:
-        os_name = "iOS (iPad)"
-    elif "android" in ua_lower:
-        os_name = "Android"
-    elif "windows" in ua_lower:
-        os_name = "Windows"
-    elif "macintosh" in ua_lower or "mac os" in ua_lower:
-        os_name = "MacOS"
-    elif "linux" in ua_lower:
-        os_name = "Linux"
+    if "iphone" in ua_lower: os_name = "iOS (iPhone)"
+    elif "ipad" in ua_lower: os_name = "iOS (iPad)"
+    elif "android" in ua_lower: os_name = "Android"
+    elif "windows" in ua_lower: os_name = "Windows"
+    elif "macintosh" in ua_lower or "mac os" in ua_lower: os_name = "MacOS"
+    elif "linux" in ua_lower: os_name = "Linux"
 
-    if "edg" in ua_lower:
-        browser_name = "Edge"
-    elif "chrome" in ua_lower and "chromium" not in ua_lower:
-        browser_name = "Chrome"
-    elif "safari" in ua_lower and "chrome" not in ua_lower:
-        browser_name = "Safari"
-    elif "firefox" in ua_lower:
-        browser_name = "Firefox"
-    elif "whatsapp" in ua_lower:
-        browser_name = "WhatsApp In-App Browser"
+    if "edg" in ua_lower: browser_name = "Edge"
+    elif "chrome" in ua_lower and "chromium" not in ua_lower: browser_name = "Chrome"
+    elif "safari" in ua_lower and "chrome" not in ua_lower: browser_name = "Safari"
+    elif "firefox" in ua_lower: browser_name = "Firefox"
+    elif "whatsapp" in ua_lower: browser_name = "WhatsApp In-App Browser"
 
     return f"{os_name} - {browser_name}"
 
 # ====================================================
-# 5. HEADER & TAMPILAN UTAMA (UI MODERN)
+# 5. TAMPILAN UTAMA (UI)
 # ====================================================
-st.markdown("<h1 style='text-align: center; margin-bottom: 5px;'>Absensi Karyawan Gresik Kota</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #64748b; margin-bottom: 30px;'>Sistem Verifikasi Kehadiran Berbasis Geofencing Otomatis</p>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; margin-bottom: 5px;'>Absensi Karyawan Gresik Bungah</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #64748b; margin-bottom: 30px;'>Sistem Verifikasi Geofencing & Live Selfie Terpadu</p>", unsafe_allow_html=True)
 
-# Tampilkan Notifikasi Sukses/Peringatan dari Session State setelah rerun
 if 'notifikasi_sukses' in st.session_state:
     st.balloons()
     st.success(st.session_state.pop('notifikasi_sukses'))
@@ -238,20 +229,20 @@ with st.expander("📍 Informasi Radius & Lokasi Kantor"):
     with col_exp2:
         st.markdown(f"**Batas Maksimal Radius:**\n`{RADIUS_MAKSIMAL_METER} meter`\n\n**Batas Jam Masuk:** `08:00 WIB`")
 
-# --- 1. PENGECEKAN LOCALSTORAGE (1 HP 1x ABSEN PER HARI) ---
+# Cek Pembatasan 1 HP 1x Absen per Hari via localStorage
 key_ls = f"sudah_absen_perangkat_{hari_ini}"
 device_sudah_absen = streamlit_js_eval(js_expressions=f"localStorage.getItem('{key_ls}')", key=f"check_ls_{hari_ini}")
 
 if device_sudah_absen == "true":
-    st.error(f"❌ **Akses Ditolak!** Perangkat (HP/Browser) ini sudah digunakan untuk absensi pada hari ini ({hari_ini}). Setiap perangkat hanya dapat digunakan 1 kali per hari.")
+    st.error(f"❌ **Akses Ditolak!** Perangkat ini sudah digunakan untuk absensi pada hari ini ({hari_ini}).")
 else:
     st.markdown("### 📍 Verifikasi Lokasi GPS Anda")
-    st.info("💡 Pastikan GPS perangkat Anda aktif dan berikan izin akses lokasi (*Allow*) pada browser.")
+    st.info("💡 Pastikan GPS aktif dan berikan izin akses lokasi (*Allow*) pada browser.")
 
     loc = get_geolocation()
 
     if not loc or not isinstance(loc, dict) or not loc.get("coords"):
-        st.warning("⏳ Menunggu sinyal koordinat GPS dari perangkat Anda... (Pastikan izin lokasi diaktifkan di browser)")
+        st.warning("⏳ Menunggu sinyal koordinat GPS dari perangkat Anda...")
     else:
         user_lat = loc["coords"]["latitude"]
         user_lon = loc["coords"]["longitude"]
@@ -265,53 +256,63 @@ else:
             st.metric(label="🎯 Batas Maksimal", value=f"{RADIUS_MAKSIMAL_METER} meter")
 
         if dalam_radius:
-            st.success("✅ **Lokasi Valid!** Anda berada di dalam wilayah jangkauan kantor.")
+            st.success("✅ **Lokasi Valid!** Anda berada di dalam jangkauan kantor.")
             st.markdown("---")
-            st.markdown("### 👤 Form Absensi Kehadiran")
+            st.markdown("### 📸 Form Presensi & Live Selfie")
             
-            with st.form(key="form_absensi"):
+            with st.form(key="form_absensi_selfie"):
                 emp_id = st.selectbox(
                     "Pilih Nama Karyawan Anda",
                     list(KARYAWAN_DATA.keys()),
                     format_func=lambda x: f"{x} — {KARYAWAN_DATA[x]}"
                 )
                 
+                # Wajib Foto Selfie Langsung Menggunakan Kamera HP
+                picture = st.camera_input("Ambil Foto Selfie Kehadiran Anda Saat Ini")
+                
                 submit_button = st.form_submit_button("🚀 Kirim Absensi Sekarang", type="primary")
                 
                 if submit_button:
-                    waktu_sekarang = datetime.now(TZ_WIB)
-                    waktu_str = waktu_sekarang.strftime("%Y-%m-%d %H:%M:%S")
-                    koordinat_str = f"{user_lat:.6f},{user_lon:.6f}"
-                    nama_karyawan = KARYAWAN_DATA[emp_id]
-                    info_perangkat = parsing_device_info(user_agent_header)
-
-                    # Logika Jam Masuk (08:00 WIB)
-                    waktu_presensi_jam = waktu_sekarang.time()
-                    if waktu_presensi_jam <= BATAS_JAM_MASUK:
-                        status_teks = "Terima Kasih Telah Datang Tepat Waktu"
+                    if picture is None:
+                        st.error("❌ Anda wajib mengambil foto selfie terlebih dahulu melalui kamera!")
                     else:
-                        status_teks = "Terlambat"
+                        waktu_sekarang = datetime.now(TZ_WIB)
+                        waktu_str = waktu_sekarang.strftime("%Y-%m-%d %H:%M:%S")
+                        koordinat_str = f"{user_lat:.6f},{user_lon:.6f}"
+                        nama_karyawan = KARYAWAN_DATA[emp_id]
+                        info_perangkat = parsing_device_info(user_agent_header)
 
-                    # Simpan ke Database SQLite
-                    berhasil = simpan_absen(
-                        hari_ini, emp_id, nama_karyawan, waktu_str, 
-                        koordinat_str, user_lat, user_lon, jarak, status_teks, info_perangkat
-                    )
-
-                    if berhasil:
-                        # Kunci browser ini agar tidak bisa absen lagi hari ini
-                        streamlit_js_eval(js_expressions=f"localStorage.setItem('{key_ls}', 'true')", key=f"set_ls_{hari_ini}")
-
-                        if waktu_presensi_jam <= BATAS_JAM_MASUK:
-                            st.session_state['notifikasi_sukses'] = f"🎉 **Absensi Berhasil!**\nTerima kasih **{nama_karyawan}**, Anda datang Tepat Waktu pada pukul {waktu_sekarang.strftime('%H:%M:%S')} WIB."
-                        else:
-                            st.session_state['notifikasi_peringatan'] = f"⚠️ **Absensi Berhasil (Terlambat)!**\n**{nama_karyawan}** tercatat hadir pada pukul {waktu_sekarang.strftime('%H:%M:%S')} WIB (Melewati jam 08:00)."
+                        # Simpan file fisik foto ke folder server
+                        bytes_data = picture.getvalue()
+                        img = Image.open(BytesIO(bytes_data))
                         
-                        st.rerun()
-                    else:
-                        st.error(f"⚠️ **{nama_karyawan}** sudah melakukan absensi sebelumnya hari ini ({hari_ini}). Data duplikat ditolak.")
+                        nama_file_foto = f"{FOLDER_FOTO}/{emp_id}_{waktu_sekarang.strftime('%Y%m%d_%H%M%S')}.jpg"
+                        img.save(nama_file_foto, "JPEG")
+
+                        # Logika Jam Masuk (08:00 WIB)
+                        waktu_presensi_jam = waktu_sekarang.time()
+                        status_teks = "Terima Kasih Telah Datang Tepat Waktu" if waktu_presensi_jam <= BATAS_JAM_MASUK else "Terlambat"
+
+                        # Simpan ke Database SQLite
+                        berhasil = simpan_absen(
+                            hari_ini, emp_id, nama_karyawan, waktu_str, 
+                            koordinat_str, user_lat, user_lon, jarak, status_teks, info_perangkat, nama_file_foto
+                        )
+
+                        if berhasil:
+                            # Kunci browser ini agar tidak bisa absen lagi hari ini
+                            streamlit_js_eval(js_expressions=f"localStorage.setItem('{key_ls}', 'true')", key=f"set_ls_{hari_ini}")
+
+                            if waktu_presensi_jam <= BATAS_JAM_MASUK:
+                                st.session_state['notifikasi_sukses'] = f"🎉 **Absensi Berhasil!**\nTerima kasih **{nama_karyawan}**, Anda datang Tepat Waktu pada pukul {waktu_sekarang.strftime('%H:%M:%S')} WIB."
+                            else:
+                                st.session_state['notifikasi_peringatan'] = f"⚠️ **Absensi Berhasil (Terlambat)!**\n**{nama_karyawan}** tercatat hadir pada pukul {waktu_sekarang.strftime('%H:%M:%S')} WIB."
+                            
+                            st.rerun()
+                        else:
+                            st.warning(f"⚠️ **{nama_karyawan}** sudah melakukan absensi sebelumnya hari ini ({hari_ini}). Data duplikat ditolak.")
         else:
-            st.error(f"❌ **Lokasi Ditolak!** Jarak Anda ({jarak:.1f} m) berada di luar batas operasional kantor ({RADIUS_MAKSIMAL_METER} m). Anda harus mendekat ke kantor untuk melakukan absensi.")
+            st.error(f"❌ **Lokasi Ditolak!** Jarak Anda ({jarak:.1f} m) berada di luar batas operasional kantor ({RADIUS_MAKSIMAL_METER} m).")
 
 # ====================================================
 # 6. PANEL ADMIN (MONITORING & EXPORT)
