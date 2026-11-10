@@ -221,7 +221,7 @@ def parsing_device_info(ua_string):
 # ====================================================
 # 5. TAMPILAN UTAMA (UI)
 # ====================================================
-st.markdown("<h1 style='text-align: center; margin-bottom: 5px;'>Absensi Karyawan Gresik Bungah</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; margin-bottom: 5px;'>Absensi Karyawan Gresik Kota</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #64748b; margin-bottom: 30px;'>Sistem Verifikasi Geofencing & Live Selfie Terpadu</p>", unsafe_allow_html=True)
 
 if 'notifikasi_sukses' in st.session_state:
