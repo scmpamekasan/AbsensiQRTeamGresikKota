@@ -55,9 +55,9 @@ st.markdown("""
 # ====================================================
 # 2. KONFIGURASI DATA KANTOR & DATABASE
 # ====================================================
-# Koordinat Kantor Terbaru (Contoh: Bungah, Gresik)
-KANTOR_LATITUDE = -6.983120          
-KANTOR_LONGITUDE = 112.489525
+# Koordinat Kantor Terbaru (Contoh: Gresik Kota )
+KANTOR_LATITUDE = -7.258910          
+KANTOR_LONGITUDE = 112.696058
 RADIUS_MAKSIMAL_METER = 150
 
 # Batas Jam Masuk Tepat Waktu (Jam 08:00:00)
@@ -207,7 +207,7 @@ def parsing_device_info(ua_string):
 # ====================================================
 # 5. HEADER & TAMPILAN UTAMA (UI MODERN)
 # ====================================================
-st.markdown("<h1 style='text-align: center; margin-bottom: 5px;'>Absensi Karyawan Gresik Bungah</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; margin-bottom: 5px;'>Absensi Karyawan Gresik Kota</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #64748b; margin-bottom: 30px;'>Sistem Verifikasi Kehadiran Berbasis Geofencing Otomatis</p>", unsafe_allow_html=True)
 
 # Tampilkan Notifikasi Sukses/Peringatan dari Session State setelah rerun
